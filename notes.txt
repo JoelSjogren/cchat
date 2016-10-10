@@ -7,8 +7,10 @@ Server
   [{ClientPid, Name}]
   [{Channel, [Name], ChannelPid}]
   
+  [{ClientPid, Name}]
+  [{Channel, [Name]}]
+
+  [{ClientPid, Name}]
+  [{Channel, [ClientPid]}]
   
-  
-  
-  
-  
+
