@@ -1,0 +1,14 @@
+Server
+  [{ClientPid, Name}]
+  [{Name, Channel}]
+  
+  [{Channel, Name, ClientPid}]
+
+  [{ClientPid, Name}]
+  [{Channel, [Name], ChannelPid}]
+  
+  
+  
+  
+  
+  
