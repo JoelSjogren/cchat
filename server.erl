@@ -48,7 +48,8 @@ handle(St, {join, Pid, Name}) ->
 
 handle(St, {leave, Pid, Channel}) ->
   NewUserList = [X || X <- dict:find(Channel, St#server_st.channels), X /= Pid],
-  dict:store(Channel, NewUserList, St#server_st.channels);
+  NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
+  {reply, ok, St#server_st{channels = NewChannels}};
 
 handle(St, Request) ->
   io:fwrite("Server received: ~p~n", [Request]),
