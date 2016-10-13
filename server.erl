@@ -40,8 +40,8 @@ lookup(Pid, Nick, Clients) ->
     true -> pid_exists;
     false ->
       case dict:is_empty(dict:filter(fun(_Pid, {OldNick, _Model}) -> OldNick == Nick end, Clients)) of
-        true -> nick_exists;
-        false -> not_found
+        false -> nick_exists;
+        true -> not_found
       end
   end.
 

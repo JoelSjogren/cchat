@@ -7,7 +7,7 @@
 
 %% Produce initial state
 initial_state(Nick, GUIName) ->
-  #client_st { gui = GUIName }.
+  #client_st {gui = GUIName, nick = Nick, server = none}.
 
 %% ---------------------------------------------------------------------------
 
@@ -25,14 +25,7 @@ handle(St, {connect, Server}) ->
   ServerAtom = list_to_atom(Server),
   Response = genserver:request(ServerAtom, Data),
   io:fwrite("Client received: ~p~n", [Response]),
-  case Response of
-    {reply, {error, Reason, Text}, St} ->
-      {reply, {error, Reason, Text}, St};
-    {reply, ok, St} ->
-      {reply, ok, St};
-    _ ->
-      {reply, {error, unexpected, "An unexpected error ocurred while connecting."}, St}
-  end;
+  {reply, Response, St#client_st{server = ServerAtom}};
 
 %% Disconnect from server
 handle(St, disconnect) ->
@@ -44,8 +37,7 @@ handle(St, {join, Channel}) ->
   % {reply, ok, St} ;
   Data = {join, self(), St#client_st.nick},
   io:fwrite("Client is sending: ~p~n", [Data]),
-  ServerAtom = list_to_atom(Channel),
-  Response = genserver:request(ServerAtom, Data),
+  Response = genserver:request(St#client_st.server, Data),
   {reply, ok, St} ;
 
 %% Leave channel
