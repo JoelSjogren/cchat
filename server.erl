@@ -7,6 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
+  io:format("Server `~p' created.", [ServerName]),
   #server_st{clients = dict:new(), channels = dict:new()}.
 
 %% ---------------------------------------------------------------------------
@@ -24,10 +25,17 @@ handle(St, {connect, Pid, Nick}) ->
     pid_exists -> {reply, {error, user_already_connected, "You are already connected."}, St};
     nick_exists -> {reply, {error, nick_taken, "Someone else is using that nickname."}, St};
     _ ->
-      Model = spawn_link(fun() -> client_model(Pid, Nick) end),
-      Clients = dict:store(Pid, {Nick, Model}, St#server_st.clients),
+      %Model = spawn_link(fun() -> client_model(Pid, Nick) end),
+      Clients = dict:store(Pid, Nick, St#server_st.clients),
       {reply, ok, St#server_st{clients = Clients}}
   end;
+
+handle(St, {join, Pid, Name}) ->
+  Pids = case dict:find(Name, St#server_st.channels) of
+    error -> [Pid];
+    {ok, OldPids} -> [Pid | OldPids]
+  end,
+  {reply, ok, St#server_st{channels = dict:store(Name, Pids, St#server_st.channels)}};
 
 handle(St, Request) ->
   io:fwrite("Server received: ~p~n", [Request]),
@@ -39,10 +47,8 @@ lookup(Pid, Nick, Clients) ->
   case dict:is_key(Pid, Clients) of
     true -> pid_exists;
     false ->
-      case dict:is_empty(dict:filter(fun(_Pid, {OldNick, _Model}) -> OldNick == Nick end, Clients)) of
+      case dict:is_empty(dict:filter(fun(_Pid, OldNick) -> OldNick == Nick end, Clients)) of
         false -> nick_exists;
         true -> not_found
       end
   end.
-
-client_model(Pid, Nick) -> 0.
