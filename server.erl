@@ -53,10 +53,9 @@ handle(St, {leave, Pid, Channel}) ->
   {reply, ok, St#server_st{channels = NewChannels}};
 
 %% Sending messages
-handle(St, {msg_from_GUI, Channel, Msg}) ->
+handle(St, {msg_from_GUI, _Channel, _Msg}) ->
   %UserList = [X || X <- dict:find(Channel, St#server_st.channels), X = ], %TODO check that the user joined the chat room
-  {reply, ok, St}.  %TODO how to prit messages on screen
-   
+  {reply, ok, St};  %TODO how to prit messages on screen
 
 %% Default response
 handle(St, Request) ->
