@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{}.
+  #server_st{clients = dict:new(), channels = dict:new()}.
 
 %% ---------------------------------------------------------------------------
 
@@ -18,8 +18,21 @@ initial_state(ServerName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
 
+%% Connect to client
+handle(St, {connect, Pid, Nick}) ->
+  case lookup(Pid, Nick) of
+    pid_exists -> {reply, {error, user_already_connected, "You are already connected."}, St};
+    nick_exists -> {reply, {error, nick_taken, "Someone else is using that nickname."}, St};
+    _ ->
+      Model = spawn_link(fun() -> client_model(Pid, Nick) end),
+      Clients = dict:store(Pid, {Nick, Model}, St#server_st.clients),
+      {reply, ok, St#server_st{clients = Clients}}
+  end
+
+
+
 handle(St, Request) ->
-    io:fwrite("Server received: ~p~n", [Request]),
-    Response = "hi!",
-    io:fwrite("Server is sending: ~p~n", [Response]),
-    {reply, Response, St}.
+  io:fwrite("Server received: ~p~n", [Request]),
+  Response = "hi!",
+  io:fwrite("Server is sending: ~p~n", [Response]),
+  {reply, Response, St}.
