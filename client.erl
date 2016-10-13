@@ -20,35 +20,65 @@ initial_state(Nick, GUIName) ->
 
 %% Connect to server
 handle(St, {connect, Server}) ->
-  Data = {connect, self(), St#client_st.nick},
-  io:fwrite("Client is sending: ~p~n", [Data]),
-  ServerAtom = list_to_atom(Server),
-  Response = genserver:request(ServerAtom, Data),
-  io:fwrite("Client received: ~p~n", [Response]),
-  {reply, Response, St#client_st{server = ServerAtom}};
+  case St#client_st.server of
+    none -> % check you're not already connected
+      Data = {connect, self(), St#client_st.nick},
+      io:fwrite("Client is sending: ~p~n", [Data]),
+      ServerAtom = list_to_atom(Server),
+      Response = genserver:request(ServerAtom, Data),
+      io:fwrite("Client received: ~p~n", [Response]),
+      {reply, Response, St#client_st{server = ServerAtom}};
+    true ->    
+      {reply, {error, already_connected, "You are already connected to a server."}, St} 
+    end;
 
 %% Disconnect from server
 handle(St, disconnect) ->
-  % {reply, ok, St} ;
-  {reply, {error, not_implemented, "Not implemented"}, St} ;
+  case St#client_st.server of
+    none ->
+      {reply, {error, not_connected, "You must connect to a server first"}, St} ;    
+    true ->
+      {reply, {error, not_implemented, "Not implemented"}, St}
+  end;
 
 % Join channel
 handle(St, {join, Channel}) ->
-  % {reply, ok, St} ;
-  Data = {join, self(), St#client_st.nick},
-  io:fwrite("Client is sending: ~p~n", [Data]),
-  Response = genserver:request(St#client_st.server, Data),
-  {reply, ok, St} ;
+  case St#client_st.server of
+    none ->
+      {reply, {error, not_connected, "You must connect to a server first."}, St} ;
+    true ->    
+      Data = {join, self(), Channel},
+      io:fwrite("Client is sending: ~p~n", [Data]),
+      Response = genserver:request(St#client_st.server, Data), %TODO server checks if user already joined
+      io:fwrite("Client received: ~p~n", [Response]),
+      {reply, ok, St}
+  end;
 
 %% Leave channel
 handle(St, {leave, Channel}) ->
-  % {reply, ok, St} ;
-  {reply, {error, not_implemented, "Not implemented"}, St} ;
+  case St#client_st.server of
+    none ->
+      {reply, {error, not_connected, "You must connect to a server first."}, St} ;
+    true ->    
+      Data = {leave, self(), Channel},
+      io:fwrite("Client is sending: ~p~n", [Data]),
+      Response = genserver:request(St#client_st.server, Data), %TODO server checks if user joined
+      io:fwrite("Client received: ~p~n", [Response]),
+      {reply, ok, St}
+  end;
 
 % Sending messages
 handle(St, {msg_from_GUI, Channel, Msg}) ->
-  % {reply, ok, St} ;
-  {reply, {error, not_implemented, "Not implemented"}, St} ;
+  case St#client_st.server of
+    none ->
+      {reply, {error, not_connected, "You must connect to a server first."}, St} ;
+    true ->    
+      Data = {msg_from_GUI, Channel, Msg},
+      io:fwrite("Client is sending: ~p~n", [Data]),
+      Response = genserver:request(St#client_st.server, Data),
+      io:fwrite("Client received: ~p~n", [Response]),
+      {reply, ok, St}
+  end;
 
 %% Get current nick
 handle(St, whoami) ->
