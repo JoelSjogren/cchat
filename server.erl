@@ -37,7 +37,7 @@ handle(St, {disconnect, Pid}) ->
   Channels = dict:map(fun(_, V) -> lists:filter(fun(X) -> X /= Pid end, V) end),
   {reply, ok, #server_st{clients = Clients, channels = Channels}};
   
-
+%% Join channel
 handle(St, {join, Pid, Name}) ->
   Pids = case dict:find(Name, St#server_st.channels) of
     error -> [Pid];
@@ -46,17 +46,21 @@ handle(St, {join, Pid, Name}) ->
   Channels = dict:store(Name, Pids, St#server_st.channels),
   {reply, ok, St#server_st{channels = Channels}};
 
+%% Leave channel
 handle(St, {leave, Pid, Channel}) ->
   NewUserList = [X || X <- dict:find(Channel, St#server_st.channels), X /= Pid],
   NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
   {reply, ok, St#server_st{channels = NewChannels}};
 
+%% Default response
 handle(St, Request) ->
   io:fwrite("Server received: ~p~n", [Request]),
   Response = "hi!",
   io:fwrite("Server is sending: ~p~n", [Response]),
   {reply, Response, St}.
 
+% Returns pid_exists if the Pid is within the registered clients
+% Returns nick_exists if the nickname provided is already assigned to a Pid
 lookup(Pid, Nick, Clients) ->
   case dict:is_key(Pid, Clients) of
     true -> pid_exists;
