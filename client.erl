@@ -20,7 +20,7 @@ initial_state(Nick, GUIName) ->
 
 %% Connect to server
 handle(St, {connect, Server}) ->
-    Data = "hello?",
+    Data = {connect, self(), St#name},
     io:fwrite("Client is sending: ~p~n", [Data]),
     ServerAtom = list_to_atom(Server),
     Response = genserver:request(ServerAtom, Data),

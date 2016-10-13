@@ -12,5 +12,8 @@ Server
 
   [{ClientPid, Name}]
   [{Channel, [ClientPid]}]
+
+  Clients: [{Pid, Name, Model}]
+  Channels: [{Name, [ClientPid]}]
   
 
