@@ -38,7 +38,7 @@ handle(St, {join, Pid, Name}) ->
   {reply, ok, St#server_st{channels = dict:store(Name, Pids, St#server_st.channels)}};
 
 handle(St, {leave, Pid, Channel}) ->
-  NewUserList = [X || X <- St#server_st.channels, X != Pid],
+  NewUserList = [X || X <- dict:find(Channel, St#server_st.channels), X /= Pid],
   dict:store(Channel, NewUserList, St#server_st.channels);
 
 handle(St, Request) ->
