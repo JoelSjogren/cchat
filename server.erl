@@ -19,7 +19,7 @@ initial_state(ServerName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
 
-%% Connect to client
+%% Connect client
 handle(St, {connect, Pid, Nick}) ->
   case lookup(Pid, Nick, St#server_st.clients) of
     pid_exists -> {reply, {error, user_already_connected, "You are already connected."}, St};
@@ -30,12 +30,21 @@ handle(St, {connect, Pid, Nick}) ->
       {reply, ok, St#server_st{clients = Clients}}
   end;
 
+%% Disconnect client
+handle(St, {disconnect, Pid}) ->
+  Clients = dict:erase(Pid, St#server_st.clients),
+  % Leave all channels
+  Channels = dict:map(fun(_, V) -> lists:filter(fun(X) -> X /= Pid end, V) end),
+  {reply, ok, #server_st{clients = Clients, channels = Channels}};
+  
+
 handle(St, {join, Pid, Name}) ->
   Pids = case dict:find(Name, St#server_st.channels) of
     error -> [Pid];
     {ok, OldPids} -> [Pid | OldPids]
   end,
-  {reply, ok, St#server_st{channels = dict:store(Name, Pids, St#server_st.channels)}};
+  Channels = dict:store(Name, Pids, St#server_st.channels),
+  {reply, ok, St#server_st{channels = Channels}};
 
 handle(St, Request) ->
   io:fwrite("Server received: ~p~n", [Request]),
