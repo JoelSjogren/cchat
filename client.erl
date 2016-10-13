@@ -25,8 +25,14 @@ handle(St, {connect, Server}) ->
   ServerAtom = list_to_atom(Server),
   Response = genserver:request(ServerAtom, Data),
   io:fwrite("Client received: ~p~n", [Response]),
-  % {reply, ok, St} ;
-  {reply, {error, not_implemented, "Not implemented"}, St} ;
+  case Response of
+    {reply, {error, Reason, Text}, St} ->
+      {reply, {error, Reason, Text}, St};
+    {reply, ok, St} ->
+      {reply, ok, St};
+    _ ->
+      {reply, {error, unexpected, "An unexpected error ocurred while connecting."}, St}
+  end;
 
 %% Disconnect from server
 handle(St, disconnect) ->
@@ -36,7 +42,11 @@ handle(St, disconnect) ->
 % Join channel
 handle(St, {join, Channel}) ->
   % {reply, ok, St} ;
-  {reply, {error, not_implemented, "Not implemented"}, St} ;
+  Data = {join, self(), St#name},
+  io:fwrite("Client is sending: ~p~n", [Data]),
+  ServerAtom = list_to_atom(Channel),
+  Response = genserver:request(ServerAtom, Data),
+  {reply, ok, St} ;
 
 %% Leave channel
 handle(St, {leave, Channel}) ->
