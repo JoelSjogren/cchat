@@ -9,6 +9,6 @@
 
 % This record defines the structure of the server process.
 % Add whatever other fields you need.
-%   clients: [{Pid, Nick}]
-%   channels: [{Name, [ClientPid]}]
+%   clients: dict(pid(), nick())
+%   channels: dict(name(), [pid()])
 -record(server_st, {clients, channels}).
