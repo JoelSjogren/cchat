@@ -38,7 +38,11 @@ handle(St, disconnect) ->
     none ->
       {reply, {error, not_connected, "You must connect to a server first"}, St} ;    
     true ->
-      {reply, {error, not_implemented, "Not implemented"}, St}
+      Data = {disconnect, self()},
+      io:fwrite("Client is sending: ~p~n", [Data]),
+      Response = genserver:request(St#client_st.server, Data),
+      io:fwrite("Client received: ~p~n", [Response]),
+      {reply, ok, St}
   end;
 
 % Join channel
@@ -75,15 +79,14 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     true ->    
       Data = {msg_from_GUI, Channel, Msg},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(St#client_st.server, Data),
+      Response = genserver:request(St#client_st.server, Data), %TODO server checks if user joined
       io:fwrite("Client received: ~p~n", [Response]),
       {reply, ok, St}
   end;
 
 %% Get current nick
 handle(St, whoami) ->
-  % {reply, "nick", St} ;
-  {reply, {error, not_implemented, "Not implemented"}, St} ;
+  {reply, ok, "Your name is ~p", [St#st_client.nick]}, St} ;
 
 %% Change nick
 handle(St, {nick, Nick}) ->
