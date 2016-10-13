@@ -42,7 +42,7 @@ handle(St, disconnect) ->
 % Join channel
 handle(St, {join, Channel}) ->
   % {reply, ok, St} ;
-  Data = {join, self(), St#name},
+  Data = {join, self(), St#client_st.nick},
   io:fwrite("Client is sending: ~p~n", [Data]),
   ServerAtom = list_to_atom(Channel),
   Response = genserver:request(ServerAtom, Data),
