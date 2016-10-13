@@ -33,7 +33,7 @@ handle(St, {connect, Pid, Nick}) ->
 %% Disconnect client
 handle(St, {disconnect, Pid}) ->
   Clients = dict:erase(Pid, St#server_st.clients),
-  % Leave all channels
+  % Leave all channels  %TODO add support for "server_not_reached", add support for "leave_channels_first"?
   Channels = dict:map(fun(_, V) -> lists:filter(fun(X) -> X /= Pid end, V) end),
   {reply, ok, #server_st{clients = Clients, channels = Channels}};
   
@@ -51,6 +51,12 @@ handle(St, {leave, Pid, Channel}) ->
   NewUserList = [X || X <- dict:find(Channel, St#server_st.channels), X /= Pid],
   NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
   {reply, ok, St#server_st{channels = NewChannels}};
+
+%% Sending messages
+handle(St, {msg_from_GUI, Channel, Msg}) ->
+  %UserList = [X || X <- dict:find(Channel, St#server_st.channels), X = ], %TODO check that the user joined the chat room
+  {reply, ok, St}.  %TODO how to prit messages on screen
+   
 
 %% Default response
 handle(St, Request) ->
