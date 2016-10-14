@@ -19,7 +19,7 @@ initial_state(Nick, GUIName) ->
 %% requesting process and NewState is the new state of the client.
 
 %% Connect to server
-handle(St, {connect, Server}) ->
+handle(St, {connect, Server}) ->  %%TODO server_not_reached
       Data = {connect, self(), St#client_st.nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
       ServerAtom = list_to_atom(Server),
@@ -32,12 +32,12 @@ handle(St, {connect, Server}) ->
       {reply, Response, St#client_st{server = NewServer}};
 
 %% Disconnect from server
-handle(St, disconnect) ->
+handle(St, disconnect) -> %%TODO server_not_reached
   case St#client_st.server of
     none ->
-      {reply, {error, not_connected, "You must connect to a server first"}, St} ;    
+      {reply, {error, user_not_connected, "You must connect to a server first"}, St} ;    
     {is, Server} ->
-      Data = {disconnect, self()},
+      Data = {disconnect, self()},  %%TODO implement leave_channels_first (?)
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
