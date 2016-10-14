@@ -89,6 +89,11 @@ handle(St, whoami) ->
 
 %% Change nick
 handle(St, {nick, Nick}) ->
+  Data = {nick, self(), Nick},
+  io:fwrite("Client is sending: ~p~n", [Data]),
+  Response = genserver:request(Server, Data), %TODO server checks if user joined
+  io:fwrite("Client received: ~p~n", [Response]),
+        
   NewSt = St#client_st{nick = Nick},
   {reply, ok, NewSt} ;
 

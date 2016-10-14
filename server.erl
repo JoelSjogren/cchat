@@ -52,7 +52,7 @@ handle(St, {leave, Pid, Channel}) ->
   NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
   {reply, ok, St#server_st{channels = NewChannels}};
 
-%% Receiving messages
+%% Accepting messages
 handle(St, {msg_from_client, Channel, Msg, Pid}) ->
   {ok, Pids} = dict:find(Channel, St#server_st.channels),
   case lists:member(Pid, Pids) of
@@ -62,6 +62,11 @@ handle(St, {msg_from_client, Channel, Msg, Pid}) ->
     false ->
       {reply, {error, user_not_joined, "You are not part of this channel."}, St}
   end;
+
+%% Change the nickname.
+handle(St = #server_st{clients = Clients, channels = Channels}, {nick, Pid, Nick}) ->
+  {ok, OldNick} = dict:find(Pid, Clients),
+  NewChannels = dict:
 
 %% Default response
 handle(St, Request) ->
