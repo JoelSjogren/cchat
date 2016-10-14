@@ -33,7 +33,7 @@ handle(St, {connect, Pid, Nick}) ->
 %% Disconnect client
 handle(St = #server_st{clients = Clients, channels = Channels}, {disconnect, Pid}) ->
   % Leave all channels
-  %TODO add support for "server_not_reached", add support for "leave_channels_first"?
+  %TODO add support for "server_not_reached"
   Forgot = fun(_Name, Pids) -> lists:member(Pid, Pids) end,
   case dict:is_empty(dict:filter(Forgot, Channels)) of
      true -> {reply, ok, St#server_st{clients = dict:erase(Pid, Clients)}};
@@ -57,16 +57,20 @@ handle(St = #server_st{channels = Channels}, {join, Pid, Name}) ->
 handle(St = #server_st{channels = Channels}, {leave, Pid, Channel}) ->
   case dict:find(Channel, Channels) of
     {ok, UserList} ->
-      NewUserList = lists:delete(Pid, UserList),
-      NewChannels = dict:store(Channel, NewUserList, Channels),
-      {reply, ok, St#server_st{channels = NewChannels}};
+      case lists:member(Pid, UserList) of
+        true ->
+          NewUserList = lists:delete(Pid, UserList),
+          NewChannels = dict:store(Channel, NewUserList, Channels),
+          {reply, ok, St#server_st{channels = NewChannels}};
+        false -> {reply, {error, user_not_joined, "You are not in this channel."}, St}
+      end;
     error ->
       {reply, {error, user_not_joined, "You are not in this channel."}, St}
   end;
 
 %% Accept messages
 handle(St, {msg_from_client, Channel, Msg, Pid}) ->
-  {ok, Pids} = dict:find(Channel, St#server_st.channels),
+  Pids = dict:fetch(Channel, St#server_st.channels),
   case lists:member(Pid, Pids) of
     true ->
       dispatch(St, Channel, Pid, Msg),
@@ -77,11 +81,17 @@ handle(St, {msg_from_client, Channel, Msg, Pid}) ->
 
 %% Set a nickname
 handle(St = #server_st{clients = Clients}, {nick, Pid, Nick}) ->
-  NewClients = dict:store(Pid, Nick, Clients),
-  {reply, ok, St#server_st{clients = NewClients}}.
+  case lookup(none, Nick, Clients) of
+    not_found ->
+      NewClients = dict:store(Pid, Nick, Clients),
+      {reply, ok, St#server_st{clients = NewClients}};
+    _ ->
+      {reply, {error, nick_taken, "That nickname is already in use."}, St}
+  end.
 
 % Returns pid_exists if the Pid is within the registered clients
 % Returns nick_exists if the nickname provided is already assigned to a Pid
+% Else, returns atom not_found
 lookup(Pid, Nick, Clients) ->
   case dict:is_key(Pid, Clients) of
     true -> pid_exists;
@@ -93,10 +103,10 @@ lookup(Pid, Nick, Clients) ->
   end.
 
 dispatch(St = #server_st{channels = Channels}, Channel, Pid0, Msg) ->
-  {ok, Nick} = dict:find(Pid0, St#server_st.clients),
+  Nick = dict:fetch(Pid0, St#server_st.clients),
   SendTo = fun(Pid1) -> fun() ->
     genserver:request(Pid1, {incoming_msg, Channel, Nick, Msg})
   end end,
-  {ok, Recipients} = dict:find(Channel, Channels),
+  Recipients = dict:fetch(Channel, Channels),
   [spawn_link(SendTo(Pid1)) || Pid1 <- Recipients, Pid0 /= Pid1].
   

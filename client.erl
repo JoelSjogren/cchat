@@ -24,13 +24,18 @@ handle(St, {connect, Server}) ->  %%TODO server_not_reached
       Data = {connect, self(), St#client_st.nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
       ServerAtom = list_to_atom(Server),
-      Response = genserver:request(ServerAtom, Data),
-      io:fwrite("Client received: ~p~n", [Response]),
-      NewServer = case Response of
-        ok -> {is, ServerAtom};
-        {error, _, _} -> St#client_st.server
-      end,
-      {reply, Response, St#client_st{server = NewServer}};
+      case lists:member(ServerAtom, registered()) of
+        false ->
+          {reply, {error, server_not_reached, "Could not reach such server"}, St};
+        true ->
+          Response = genserver:request(ServerAtom, Data),
+          io:fwrite("Client received: ~p~n", [Response]),
+          NewServer = case Response of
+            ok -> {is, ServerAtom};
+            {error, _, _} -> St#client_st.server
+          end,  
+          {reply, Response, St#client_st{server = NewServer}}
+      end;
 
 %% Disconnect from server
 handle(St, disconnect) -> %%TODO server_not_reached
@@ -38,7 +43,7 @@ handle(St, disconnect) -> %%TODO server_not_reached
     none ->
       {reply, {error, user_not_connected, "You must connect to a server first"}, St} ;    
     {is, Server} ->
-      Data = {disconnect, self()},  %%TODO implement leave_channels_first (?)
+      Data = {disconnect, self()},
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
@@ -95,7 +100,7 @@ handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
     {is, Server} ->
       Data = {nick, self(), Nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO nick_taken
+      Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response])
   end,
   NewSt = St#client_st{nick = Nick},
