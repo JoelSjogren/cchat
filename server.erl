@@ -38,15 +38,17 @@ handle(St, {disconnect, Pid}) ->
   {reply, ok, #server_st{clients = Clients, channels = Channels}};
   
 %% Join channel
-handle(St = #server_st{clients = Clients}, {join, Pid, Name}) ->
-%  case lookup(Pid, none, Clients) of
-%    pid_exi
-  Pids = case dict:find(Name, St#server_st.channels) of
-    error -> [Pid];
-    {ok, OldPids} -> [Pid | OldPids]
-  end,
+handle(St = #server_st{channels = Channels}, {join, Pid, Name}) ->
+  {Response, Pids} = case dict:find(Name, Channels) of
+    error -> {ok, [Pid]};
+    {ok, OldPids} ->
+      case lists:member(Pid, OldPids) of
+        true -> {{error, user_already_joined, "You already joined this channel."}, OldPids};
+        false -> {ok, [Pid | OldPids]}
+      end
+    end,
   Channels = dict:store(Name, Pids, St#server_st.channels),
-  {reply, ok, St#server_st{channels = Channels}};
+  {reply, Response, St#server_st{channels = Channels}};
 
 %% Leave channel
 handle(St, {leave, Pid, Channel}) ->
