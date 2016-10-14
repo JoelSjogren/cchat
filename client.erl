@@ -41,7 +41,7 @@ handle(St, disconnect) ->
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
-      {reply, ok, St}
+      {reply, Response, St}
   end;
 
 % Join channel
@@ -54,7 +54,7 @@ handle(St, {join, Channel}) ->
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data), %TODO server checks if user already joined
       io:fwrite("Client received: ~p~n", [Response]),
-      {reply, ok, St}
+      {reply, Response, St}
   end;
 
 %% Leave channel
@@ -67,7 +67,7 @@ handle(St, {leave, Channel}) ->
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data), %TODO server checks if user joined
       io:fwrite("Client received: ~p~n", [Response]),
-      {reply, ok, St}
+      {reply, Response, St}
   end;
 
 % Sending messages
@@ -80,7 +80,7 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data), %TODO server checks if user joined
       io:fwrite("Client received: ~p~n", [Response]),
-      {reply, ok, St}
+      {reply, Response, St}
   end;
 
 %% Get current nick
@@ -90,7 +90,7 @@ handle(St, whoami) ->
 %% Set nick
 handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
   case MaybeServer of
-    none -> skip;
+    none -> Response = ok;
     {is, Server} ->
       Data = {nick, self(), Nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
@@ -98,10 +98,10 @@ handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
       io:fwrite("Client received: ~p~n", [Response])
   end,
   NewSt = St#client_st{nick = Nick},
-  {reply, ok, NewSt};
+  {reply, Response, NewSt};
 
 
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
   gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Nick++"> "++Msg}),
-  {reply, ok, St}.  % TODO remove _ in "gen_server"?
+  {reply, ok, St}.

@@ -38,7 +38,9 @@ handle(St, {disconnect, Pid}) ->
   {reply, ok, #server_st{clients = Clients, channels = Channels}};
   
 %% Join channel
-handle(St, {join, Pid, Name}) ->
+handle(St = #server_st{clients = Clients}, {join, Pid, Name}) ->
+%  case lookup(Pid, none, Clients) of
+%    pid_exi
   Pids = case dict:find(Name, St#server_st.channels) of
     error -> [Pid];
     {ok, OldPids} -> [Pid | OldPids]
@@ -52,7 +54,7 @@ handle(St, {leave, Pid, Channel}) ->
   NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
   {reply, ok, St#server_st{channels = NewChannels}};
 
-%% Accepting messages
+%% Accept messages
 handle(St, {msg_from_client, Channel, Msg, Pid}) ->
   {ok, Pids} = dict:find(Channel, St#server_st.channels),
   case lists:member(Pid, Pids) of
