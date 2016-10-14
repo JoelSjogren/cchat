@@ -63,10 +63,10 @@ handle(St, {msg_from_client, Channel, Msg, Pid}) ->
       {reply, {error, user_not_joined, "You are not part of this channel."}, St}
   end;
 
-%% Change the nickname.
-handle(St = #server_st{clients = Clients, channels = Channels}, {nick, Pid, Nick}) ->
-  {ok, OldNick} = dict:find(Pid, Clients),
-  NewChannels = dict:
+%% Set a nickname
+handle(St = #server_st{clients = Clients}, {nick, Pid, Nick}) ->
+  NewClients = dict:store(Pid, Nick, Clients),
+  {reply, ok, St#server_st{clients = NewClients}};
 
 %% Default response
 handle(St, Request) ->

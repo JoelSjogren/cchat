@@ -87,15 +87,19 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
 handle(St, whoami) ->
   {reply, St#client_st.nick, St} ;
 
-%% Change nick
-handle(St, {nick, Nick}) ->
-  Data = {nick, self(), Nick},
-  io:fwrite("Client is sending: ~p~n", [Data]),
-  Response = genserver:request(Server, Data), %TODO server checks if user joined
-  io:fwrite("Client received: ~p~n", [Response]),
-        
+%% Set nick
+handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
+  case MaybeServer of
+    none -> skip;
+    {is, Server} ->
+      Data = {nick, self(), Nick},
+      io:fwrite("Client is sending: ~p~n", [Data]),
+      Response = genserver:request(Server, Data), %TODO server checks if user joined
+      io:fwrite("Client received: ~p~n", [Response])
+  end,
   NewSt = St#client_st{nick = Nick},
-  {reply, ok, NewSt} ;
+  {reply, ok, NewSt};
+
 
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
