@@ -20,17 +20,16 @@ initial_state(Nick, GUIName) ->
 
 %% Connect to server
 handle(St, {connect, Server}) ->
-  case St#client_st.server of
-    none -> % check you're not already connected
       Data = {connect, self(), St#client_st.nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
       ServerAtom = list_to_atom(Server),
       Response = genserver:request(ServerAtom, Data),
       io:fwrite("Client received: ~p~n", [Response]),
-      {reply, Response, St#client_st{server = {is, ServerAtom}}};
-    _ ->    
-      {reply, {error, already_connected, "You are already connected to a server."}, St} 
-    end;
+      NewServer = case Response of
+        ok -> {is, ServerAtom};
+        {error, _, _} -> St#client_st.server
+      end,
+      {reply, Response, St#client_st{server = NewServer}};
 
 %% Disconnect from server
 handle(St, disconnect) ->
@@ -77,7 +76,7 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     none ->
       {reply, {error, not_connected, "You must connect to a server first."}, St} ;
     {is, Server} ->   
-      Data = {msg_from_GUI, Channel, Msg},
+      Data = {msg_from_client, Channel, Msg, self()},
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data), %TODO server checks if user joined
       io:fwrite("Client received: ~p~n", [Response]),
@@ -94,6 +93,6 @@ handle(St, {nick, Nick}) ->
   {reply, ok, NewSt} ;
 
 %% Incoming message
-handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
-  gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Name++"> "++Msg}),
-  {reply, ok, St}.
+handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
+  gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Nick++"> "++Msg}),
+  {reply, ok, St}.  % TODO remove _ in "gen_server"?

@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-  io:format("Server `~p' created.", [ServerName]),
+  io:format("Server ~p created.", [ServerName]),
   #server_st{clients = dict:new(), channels = dict:new()}.
 
 %% ---------------------------------------------------------------------------
@@ -48,14 +48,20 @@ handle(St, {join, Pid, Name}) ->
 
 %% Leave channel
 handle(St, {leave, Pid, Channel}) ->
-  NewUserList = [X || X <- dict:find(Channel, St#server_st.channels), X /= Pid],
+  NewUserList = [X || {ok, X} <- dict:find(Channel, St#server_st.channels), X /= Pid],
   NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
   {reply, ok, St#server_st{channels = NewChannels}};
 
-%% Sending messages
-handle(St, {msg_from_GUI, _Channel, _Msg}) ->
-  %UserList = [X || X <- dict:find(Channel, St#server_st.channels), X = ], %TODO check that the user joined the chat room
-  {reply, ok, St};  %TODO how to prit messages on screen
+%% Receiving messages
+handle(St, {msg_from_client, Channel, Msg, Pid}) ->
+  {ok, Pids} = dict:find(Channel, St#server_st.channels),
+  case lists:member(Pid, Pids) of
+    true ->
+      dispatch(St, Channel, Pid, Msg),
+      {reply, ok, St};
+    false ->
+      {reply, {error, user_not_joined, "You are not part of this channel."}, St}
+  end;
 
 %% Default response
 handle(St, Request) ->
@@ -75,3 +81,12 @@ lookup(Pid, Nick, Clients) ->
         true -> not_found
       end
   end.
+
+dispatch(St = #server_st{channels = Channels}, Channel, Pid0, Msg) ->
+  {ok, Nick} = dict:find(Pid0, St#server_st.clients),
+  SendTo = fun(Pid1) -> fun() ->
+    genserver:request(Pid1, {incoming_msg, Channel, Nick, Msg})
+  end end,
+  {ok, Recipients} = dict:find(Channel, Channels),
+  [spawn_link(SendTo(Pid1)) || Pid1 <- Recipients, Pid0 /= Pid1].
+  
