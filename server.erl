@@ -31,11 +31,14 @@ handle(St, {connect, Pid, Nick}) ->
   end;
 
 %% Disconnect client
-handle(St, {disconnect, Pid}) ->
-  Clients = dict:erase(Pid, St#server_st.clients),
-  % Leave all channels  %TODO add support for "server_not_reached", add support for "leave_channels_first"?
-  Channels = dict:map(fun(_, V) -> lists:filter(fun(X) -> X /= Pid end, V) end),
-  {reply, ok, #server_st{clients = Clients, channels = Channels}};
+handle(St = #server_st{clients = Clients, channels = Channels}, {disconnect, Pid}) ->
+  % Leave all channels
+  %TODO add support for "server_not_reached", add support for "leave_channels_first"?
+  Forgot = fun(_Name, Pids) -> lists:member(Pid, Pids) end,
+  case dict:is_empty(dict:filter(Forgot, Channels)) of
+     true -> {reply, ok, St#server_st{clients = dict:erase(Pid, Clients)}};
+     false -> {reply, {error, leave_channels_first, "Leave all channels before disconnecting."}, St}
+  end;
   
 %% Join channel
 handle(St = #server_st{channels = Channels}, {join, Pid, Name}) ->
@@ -47,14 +50,19 @@ handle(St = #server_st{channels = Channels}, {join, Pid, Name}) ->
         false -> {ok, [Pid | OldPids]}
       end
     end,
-  Channels = dict:store(Name, Pids, St#server_st.channels),
-  {reply, Response, St#server_st{channels = Channels}};
+  NewChannels = dict:store(Name, Pids, Channels),
+  {reply, Response, St#server_st{channels = NewChannels}};
 
 %% Leave channel
-handle(St, {leave, Pid, Channel}) ->
-  NewUserList = [X || {ok, X} <- dict:find(Channel, St#server_st.channels), X /= Pid],
-  NewChannels = dict:store(Channel, NewUserList, St#server_st.channels),
-  {reply, ok, St#server_st{channels = NewChannels}};
+handle(St = #server_st{channels = Channels}, {leave, Pid, Channel}) ->
+  case dict:find(Channel, Channels) of
+    {ok, UserList} ->
+      NewUserList = lists:delete(Pid, UserList),
+      NewChannels = dict:store(Channel, NewUserList, Channels),
+      {reply, ok, St#server_st{channels = NewChannels}};
+    error ->
+      {reply, {error, user_not_joined, "You are not in this channel."}, St}
+  end;
 
 %% Accept messages
 handle(St, {msg_from_client, Channel, Msg, Pid}) ->
@@ -64,20 +72,13 @@ handle(St, {msg_from_client, Channel, Msg, Pid}) ->
       dispatch(St, Channel, Pid, Msg),
       {reply, ok, St};
     false ->
-      {reply, {error, user_not_joined, "You are not part of this channel."}, St}
+      {reply, {error, user_not_joined, "You are not in this channel."}, St}
   end;
 
 %% Set a nickname
 handle(St = #server_st{clients = Clients}, {nick, Pid, Nick}) ->
   NewClients = dict:store(Pid, Nick, Clients),
-  {reply, ok, St#server_st{clients = NewClients}};
-
-%% Default response
-handle(St, Request) ->
-  io:fwrite("Server received: ~p~n", [Request]),
-  Response = "hi!",
-  io:fwrite("Server is sending: ~p~n", [Response]),
-  {reply, Response, St}.
+  {reply, ok, St#server_st{clients = NewClients}}.
 
 % Returns pid_exists if the Pid is within the registered clients
 % Returns nick_exists if the nickname provided is already assigned to a Pid

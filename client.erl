@@ -20,6 +20,7 @@ initial_state(Nick, GUIName) ->
 
 %% Connect to server
 handle(St, {connect, Server}) ->  %%TODO server_not_reached
+      % ??
       Data = {connect, self(), St#client_st.nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
       ServerAtom = list_to_atom(Server),
@@ -41,7 +42,7 @@ handle(St, disconnect) -> %%TODO server_not_reached
       io:fwrite("Client is sending: ~p~n", [Data]),
       Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
-      {reply, Response, St}
+      {reply, Response, St#client_st{server = none}}
   end;
 
 % Join channel
@@ -52,7 +53,7 @@ handle(St, {join, Channel}) ->
     {is, Server} ->
       Data = {join, self(), Channel},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO server checks if user already joined
+      Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
       {reply, Response, St}
   end;
@@ -65,7 +66,7 @@ handle(St, {leave, Channel}) ->
     {is, Server} ->
       Data = {leave, self(), Channel},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO server checks if user joined
+      Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
       {reply, Response, St}
   end;
