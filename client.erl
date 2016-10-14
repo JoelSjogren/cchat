@@ -52,7 +52,7 @@ handle(St, {join, Channel}) ->
     {is, Server} ->
       Data = {join, self(), Channel},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO server checks if user already joined
+      Response = genserver:request(Server, Data), %TODO user_already_joined
       io:fwrite("Client received: ~p~n", [Response]),
       {reply, Response, St}
   end;
@@ -65,7 +65,7 @@ handle(St, {leave, Channel}) ->
     {is, Server} ->
       Data = {leave, self(), Channel},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO server checks if user joined
+      Response = genserver:request(Server, Data), %TODO user_not_joined
       io:fwrite("Client received: ~p~n", [Response]),
       {reply, Response, St}
   end;
@@ -78,7 +78,7 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     {is, Server} ->   
       Data = {msg_from_client, Channel, Msg, self()},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO server checks if user joined
+      Response = genserver:request(Server, Data),
       io:fwrite("Client received: ~p~n", [Response]),
       {reply, Response, St}
   end;
@@ -94,7 +94,7 @@ handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
     {is, Server} ->
       Data = {nick, self(), Nick},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data), %TODO server checks if user joined
+      Response = genserver:request(Server, Data), %TODO nick_taken
       io:fwrite("Client received: ~p~n", [Response])
   end,
   NewSt = St#client_st{nick = Nick},
@@ -104,4 +104,4 @@ handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
   gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Nick++"> "++Msg}),
-  {reply, ok, St}.
+  {reply, ok, St}. %%TODO remove underscore in gen_server?
