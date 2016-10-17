@@ -2,9 +2,6 @@
 -export([handle/2, initial_state/1]).
 -include_lib("./defs.hrl").
 
-%% inititial_state/2 and handle/2 are used togetger with the genserver module,
-%% explained in the lecture about Generic server.
-
 % Produce initial state
 initial_state(ServerName) ->
   io:format("Server ~p created.", [ServerName]),
@@ -94,8 +91,10 @@ handle(St = #server_st{clients = Clients}, {nick, Pid, Nick}) ->
       {reply, {error, nick_taken, "That nickname is already in use."}, St}
   end.
 
-% Returns pid_exists if the Pid is within the registered clients
-% Returns nick_exists if the nickname provided is already assigned to a Pid
+%% ---------------------------------------------------------------------------
+
+% Returns pid_exists if the Pid is within the registered Clients
+% Returns nick_exists if the Nick provided is already assigned to a Pid
 % Else, returns atom not_found
 lookup(Pid, Nick, Clients) ->
   case dict:is_key(Pid, Clients) of
@@ -107,6 +106,8 @@ lookup(Pid, Nick, Clients) ->
       end
   end.
 
+% Send a message to all other clients on the same channel
+%   Pid0: pid of the sender
 dispatch(St = #server_st{channels = Channels}, Channel, Pid0, Msg) ->
   Nick = dict:fetch(Pid0, St#server_st.clients),
   SendTo = fun(Pid1) -> fun() ->
