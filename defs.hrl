@@ -6,8 +6,6 @@
 %   server: the 'none' atom or {is, pid()}
 -record(client_st, {gui, nick, server}).
 
-%-record(client_info, {nick}).
-
 % This record defines the structure of the server process.
 % Add whatever other fields you need.
 %   clients: dict(pid(), nick())

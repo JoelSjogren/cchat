@@ -38,8 +38,8 @@ handle(St = #server_st{clients = Clients, channels = Channels}, {disconnect, Pid
   % Leave all channels
   Forgot = fun(_Name, Pids) -> lists:member(Pid, Pids) end,
   case dict:is_empty(dict:filter(Forgot, Channels)) of
-     true -> {reply, ok, St#server_st{clients = dict:erase(Pid, Clients)}};
-     false -> {reply, {error, leave_channels_first, "Leave all channels before disconnecting."}, St}
+    true -> {reply, ok, St#server_st{clients = dict:erase(Pid, Clients)}};
+    false -> {reply, {error, leave_channels_first, "Leave all channels before disconnecting."}, St}
   end;
   
 %% Join channel
