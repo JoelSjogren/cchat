@@ -22,7 +22,7 @@ initial_state(ServerName) ->
 %% Common variable names:
 %%  Pid: of a client
 %%  Nick: a nickname
-%%  Name: of a channel
+%%  Name or Channel: name of a channel
 %%  New~: updated value of ~
 %%  Msg: a string
 
@@ -32,7 +32,6 @@ handle(St, {connect, Pid, Nick}) ->
     pid_exists -> {reply, {error, user_already_connected, "You are already connected."}, St};
     nick_exists -> {reply, {error, nick_taken, "Someone else is using that nickname."}, St};
     _ ->
-      %Model = spawn_link(fun() -> client_model(Pid, Nick) end),
       Clients = dict:store(Pid, Nick, St#server_st.clients),
       {reply, ok, St#server_st{clients = Clients}}
   end;
@@ -40,7 +39,6 @@ handle(St, {connect, Pid, Nick}) ->
 %% Disconnect client
 handle(St = #server_st{clients = Clients, channels = Channels}, {disconnect, Pid}) ->
   % Leave all channels
-  %TODO add support for "server_not_reached"
   Forgot = fun(_Name, Pids) -> lists:member(Pid, Pids) end,
   case dict:is_empty(dict:filter(Forgot, Channels)) of
      true -> {reply, ok, St#server_st{clients = dict:erase(Pid, Clients)}};

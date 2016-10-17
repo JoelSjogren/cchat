@@ -19,35 +19,37 @@ initial_state(Nick, GUIName) ->
 %% requesting process and NewState is the new state of the client.
 
 %% Connect to server
-handle(St, {connect, Server}) ->  %%TODO server_not_reached
-      % ??
-      Data = {connect, self(), St#client_st.nick},
-      io:fwrite("Client is sending: ~p~n", [Data]),
-      ServerAtom = list_to_atom(Server),
-      case lists:member(ServerAtom, registered()) of
-        false ->
-          {reply, {error, server_not_reached, "Could not reach such server"}, St};
-        true ->
-          Response = genserver:request(ServerAtom, Data),
-          io:fwrite("Client received: ~p~n", [Response]),
-          NewServer = case Response of
-            ok -> {is, ServerAtom};
-            {error, _, _} -> St#client_st.server
-          end,  
-          {reply, Response, St#client_st{server = NewServer}}
-      end;
+handle(St, {connect, Server}) ->
+  Data = {connect, self(), St#client_st.nick},
+  io:fwrite("Client is sending: ~p~n", [Data]),
+  ServerAtom = list_to_atom(Server),
+  case lists:member(ServerAtom, registered()) of
+    false ->
+      {reply, {error, server_not_reached, "Could not reach such server (not registered)"}, St};
+    true ->
+      try genserver:request(ServerAtom, Data) of
+        ok -> {reply, ok, St#client_st{server = {is, ServerAtom}}};
+        Error -> {reply, Error, St}
+      catch
+        _:_ -> {reply, {error, server_not_reached, "Could not reach such server (timeout)"}, St}
+      end
+  %io:fwrite("Client received: ~p~n", [Response]),
+  end;
 
 %% Disconnect from server
-handle(St, disconnect) -> %%TODO server_not_reached
+handle(St, disconnect) ->
   case St#client_st.server of
     none ->
       {reply, {error, user_not_connected, "You must connect to a server first"}, St} ;    
     {is, Server} ->
       Data = {disconnect, self()},
       io:fwrite("Client is sending: ~p~n", [Data]),
-      Response = genserver:request(Server, Data),
-      io:fwrite("Client received: ~p~n", [Response]),
-      {reply, Response, St#client_st{server = none}}
+      try genserver:request(Server, Data) of
+        ok -> {reply, ok, St#client_st{server = none}};
+        Error -> {reply, Error, St}
+      catch
+        _:_ -> {reply, {error, server_not_reached, "Could not reach such server (timeout)"}, St}
+      end
   end;
 
 % Join channel
@@ -108,6 +110,8 @@ handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
 
 
 %% Incoming message
-handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
+handle(St = #client_st { gui = GUIName }, Data = {incoming_msg, Channel, Nick, Msg}) ->
+  io:fwrite("Server sent (to ~p): ~p~n", [GUIName, Data]),
   gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Nick++"> "++Msg}),
-  {reply, ok, St}. %%TODO remove underscore in gen_server?
+  io:fwrite("Displayed it.~n"),
+  {reply, ok, St}.
