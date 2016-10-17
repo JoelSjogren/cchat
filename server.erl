@@ -19,6 +19,13 @@ initial_state(ServerName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
 
+%% Common variable names:
+%%  Pid: of a client
+%%  Nick: a nickname
+%%  Name: of a channel
+%%  New~: updated value of ~
+%%  Msg: a string
+
 %% Connect client
 handle(St, {connect, Pid, Nick}) ->
   case lookup(Pid, Nick, St#server_st.clients) of
