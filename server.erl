@@ -7,6 +7,11 @@ initial_state(ServerName) ->
   io:format("Server ~p created.", [ServerName]),
   #server_st{clients = dict:new(), channels = dict:new()}.
 
+% Produce initial channel state
+initial_channel_state(ChannelName) ->
+  io:format("Channel ~p created.", [ChannelName]),
+  #channel_st{name = ChannelName, clients = dict:new()}.
+
 %% ---------------------------------------------------------------------------
 
 %% handle/2 handles requests from clients
@@ -35,7 +40,7 @@ handle(St, {connect, Pid, Nick}) ->
 
 %% Disconnect client
 handle(St = #server_st{clients = Clients, channels = Channels}, {disconnect, Pid}) ->
-  % Leave all channels
+  % Leave all channels %%TODO to be handled by client
   Forgot = fun(_Name, Pids) -> lists:member(Pid, Pids) end,
   case dict:is_empty(dict:filter(Forgot, Channels)) of
     true -> {reply, ok, St#server_st{clients = dict:erase(Pid, Clients)}};
@@ -43,53 +48,64 @@ handle(St = #server_st{clients = Clients, channels = Channels}, {disconnect, Pid
   end;
   
 %% Join channel
-handle(St = #server_st{channels = Channels}, {join, Pid, Name}) ->
-  {Response, Pids} = case dict:find(Name, Channels) of
-    error -> {ok, [Pid]};
-    {ok, OldPids} ->
-      case lists:member(Pid, OldPids) of
-        true -> {{error, user_already_joined, "You already joined this channel."}, OldPids};
-        false -> {ok, [Pid | OldPids]}
-      end
-    end,
-  NewChannels = dict:store(Name, Pids, Channels),
-  {reply, Response, St#server_st{channels = NewChannels}};
-
-%% Leave channel
-handle(St = #server_st{channels = Channels}, {leave, Pid, Channel}) ->
-  case dict:find(Channel, Channels) of
-    {ok, UserList} ->
-      case lists:member(Pid, UserList) of
-        true ->
-          NewUserList = lists:delete(Pid, UserList),
-          NewChannels = dict:store(Channel, NewUserList, Channels),
-          {reply, ok, St#server_st{channels = NewChannels}};
-        false -> {reply, {error, user_not_joined, "You are not in this channel."}, St}
-      end;
-    error ->
-      {reply, {error, user_not_joined, "You are not in this channel."}, St}
-  end;
-
-%% Accept messages
-handle(St, {msg_from_client, Channel, Msg, Pid}) ->
-  Pids = dict:fetch(Channel, St#server_st.channels),
-  case lists:member(Pid, Pids) of
-    true ->
-      dispatch(St, Channel, Pid, Msg),
-      {reply, ok, St};
-    false ->
-      {reply, {error, user_not_joined, "You are not in this channel."}, St}
-  end;
+handle(St = #server_st{clients = Clients, channels = Channels}, {join, Pid, Name}) ->
+  % Find the channel, creating a new process for it if necessary.
+  {ChannelPid, NewChannels} = case dict:find(Name, Channels) of
+    error -> 
+      ChannelPid = genserver:start(no_name, initial_channel_state(Name), fun channel_handle/2),
+      {ok, dict:store(Name, Pid, Channels)};
+    {ok, ChannelPid} -> {ChannelPid, Channels},
+  Nick = dict:fetch(Pid, clients),
+  Response = genserver:request(ChannelPid, {channel_join, Pid, Nick}),
+  {reply, Response, St#server_st{channels = NewChannels};
 
 %% Set a nickname
 handle(St = #server_st{clients = Clients}, {nick, Pid, Nick}) ->
   case lookup(none, Nick, Clients) of
     not_found ->
       NewClients = dict:store(Pid, Nick, Clients),
+      notify = fun(ClientPid) genserver:request(ClientPid, {channel_nick_private, Pid, Nick}) end,
+      lists:foreach(notify, dict:fetch_keys(clients)),
       {reply, ok, St#server_st{clients = NewClients}};
     _ ->
       {reply, {error, nick_taken, "That nickname is already in use."}, St}
   end.
+
+
+%% ---------------------------------------------------------------------------
+
+%% channel_handle/2 handles requests from clients
+channel_handle(St = #channel_st{clients = Clients}, {channel_join, Pid, Nick}) ->
+  {Response, NewClients} = case dict:is_key(Pid, Clients) of
+    true -> {{error, user_already_joined, "You already joined this channel."}, Clients};
+    false -> {ok, dict:store(Pid, Nick, Clients)}
+  end
+  {reply, Response, St#channel_st{clients = NewClients}};
+
+%% Leave channel
+channel_handle(St = #channel_st{clients = Clients}, {channel_leave, Pid}) ->
+  case dict:is_key(Pid, Clients) of
+    true ->
+      NewClients = dict:erase(Pid, Clients),
+      {reply, ok, St#server_st{clients = NewClients}};
+    false -> {reply, {error, user_not_joined, "You are not in this channel."}, St}
+  end;
+
+%% Accept messages
+channel_handle(St = #channel_st{name = Name, clients = Clients}, {msg_from_client, Msg, Pid}) ->
+  case lists:member(Pid, Clients) of
+    true ->
+      dispatch(St, Name, Pid, Msg),
+      {reply, ok, St};
+    false ->
+      {reply, {error, user_not_joined, "You are not in this channel."}, St}
+  end;
+
+%% Set a nickname
+%% Only servers are allowed to send this kind of request.
+handle(St = #channel_st{clients = Clients}, {channel_nick_private, Pid, Nick}) ->
+  NewClients = dict:store(Pid, Nick, Clients),
+  {reply, ok, St#server_st{clients = NewClients}};
 
 %% ---------------------------------------------------------------------------
 
@@ -108,11 +124,11 @@ lookup(Pid, Nick, Clients) ->
 
 % Send a message to all other clients on the same channel
 %   Pid0: pid of the sender
-dispatch(St = #server_st{channels = Channels}, Channel, Pid0, Msg) ->
+dispatch(St = #channel_st{clients = Clients}, Channel, Pid0, Msg) ->
   Nick = dict:fetch(Pid0, St#server_st.clients),
   SendTo = fun(Pid1) -> fun() ->
     genserver:request(Pid1, {incoming_msg, Channel, Nick, Msg})
   end end,
-  Recipients = dict:fetch(Channel, Channels),
-  [spawn_link(SendTo(Pid1)) || Pid1 <- Recipients, Pid0 /= Pid1].
-  
+  [spawn_link(SendTo(Pid1)) || Pid1 <- dict:fetch_keys(Clients), Pid0 /= Pid1].
+
+

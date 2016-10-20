@@ -76,13 +76,12 @@ handle(St, {leave, Channel}) ->
   end;
 
 % Sending messages
-handle(St, {msg_from_GUI, Channel, Msg}) ->
-  case St#client_st.server of
-    none ->
-      {reply, {error, not_connected, "You must connect to a server first."}, St} ;
-    {is, Server} ->   
+handle(St = #client_st{channels = Channels}, {msg_from_GUI, Channel, Msg}) ->
+  case dict:find(Channel, Channels) of
+    error -> {reply, {error, user_not_joined, "You must connect to the channel first."}, St} ;
+    {ok, Pid} ->
       Data = {msg_from_client, Channel, Msg, self()},
-      Response = genserver:request(Server, Data),
+      Response = genserver:request(Pid, Data),
       {reply, Response, St}
   end;
 
