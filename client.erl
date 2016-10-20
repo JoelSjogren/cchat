@@ -4,7 +4,7 @@
 
 %% Produce initial state
 initial_state(Nick, GUIName) ->
-  #client_st {gui = GUIName, nick = Nick, server = none}.
+  #client_st {gui = GUIName, nick = Nick, maybe_server = none, channels = dict:new()}.
 
 %% ---------------------------------------------------------------------------
 
@@ -23,15 +23,15 @@ initial_state(Nick, GUIName) ->
 %%  Msg: a string
 
 %% Connect to server
-handle(St, {connect, Server}) ->
-  ServerAtom = list_to_atom(Server),
+handle(St = #client_st{nick = Nick}, {connect, ServerName}) ->
+  ServerAtom = list_to_atom(ServerName),
   case lists:member(ServerAtom, registered()) of
     false ->
       {reply, {error, server_not_reached, "Could not reach such server (not registered)"}, St};
     true ->
-      Data = {connect, self(), St#client_st.nick},
+      Data = {connect, self(), Nick},
       try genserver:request(ServerAtom, Data) of
-        ok -> {reply, ok, St#client_st{server = {is, ServerAtom}}};
+        ok -> {reply, ok, St#client_st{maybe_server = {is, ServerAtom}}};
         Error -> {reply, Error, St}
       catch
         _:_ -> {reply, {error, server_not_reached, "Could not reach such server (timeout)"}, St}
@@ -39,62 +39,78 @@ handle(St, {connect, Server}) ->
   end;
 
 %% Disconnect from server
-handle(St, disconnect) ->
-  case St#client_st.server of
-    none ->
+handle(St = #client_st{maybe_server = MaybeServer, channels = Channels}, disconnect) ->
+  case {MaybeServer, dict:is_empty(Channels)} of
+    {none, _} ->
       {reply, {error, user_not_connected, "You must connect to a server first"}, St} ;    
-    {is, Server} ->
+    {_, false} ->
+      {reply, {error, leave_channels_first, "Leave all channels before disconnecting."}, St};
+    {{is, Server}, true} ->
+      % Tell server 
       Data = {disconnect, self()},
       try genserver:request(Server, Data) of
-        ok -> {reply, ok, St#client_st{server = none}};
-        Error -> {reply, Error, St}
+        ok -> {reply, ok, St#client_st{maybe_server = none}}
       catch
         _:_ -> {reply, {error, server_not_reached, "Could not reach such server (timeout)"}, St}
       end
   end;
 
 % Join channel
-handle(St, {join, Channel}) ->
-  case St#client_st.server of
+handle(St = #client_st{maybe_server = MaybeServer, channels = Channels}, {join, Name}) ->
+  case MaybeServer of
     none ->
       {reply, {error, not_connected, "You must connect to a server first."}, St} ;
     {is, Server} ->
-      Data = {join, self(), Channel},
-      Response = genserver:request(Server, Data),
-      {reply, Response, St}
+      Data = {join, self(), Name},
+      case genserver:request(Server, Data) of
+        {ok, ChannelPid} ->
+          NewChannels = dict:store(Name, ChannelPid, Channels),
+          {reply, ok, St#client_st{channels = NewChannels}};
+        Error ->
+          {reply, Error, St}
+      end
   end;
 
 %% Leave channel
-handle(St, {leave, Channel}) ->
-  case St#client_st.server of
-    none ->
+handle(St = #client_st{maybe_server = MaybeServer, channels = Channels}, {leave, Name}) ->
+  case {MaybeServer, dict:find(Name, Channels)} of
+    {none, _} ->
       {reply, {error, not_connected, "You must connect to a server first."}, St} ;
-    {is, Server} ->
-      Data = {leave, self(), Channel},
-      Response = genserver:request(Server, Data),
-      {reply, Response, St}
+    {_, error} ->
+      {reply, {error, user_not_joined, "You are not in this channel."}, St};
+    {{is, _Server}, {ok, ChannelPid}} ->
+      Data = {channel_leave, self()},
+      case genserver:request(ChannelPid, Data) of
+        ok ->
+          NewChannels = dict:erase(Name, Channels),
+          {reply, ok, St#client_st{channels = NewChannels}};
+        Error ->
+          {reply, Error, St}
+      end
+      
   end;
 
 % Sending messages
-handle(St = #client_st{channels = Channels}, {msg_from_GUI, Channel, Msg}) ->
-  case dict:find(Channel, Channels) of
+handle(St = #client_st{channels = Channels}, {msg_from_GUI, Name, Msg}) ->
+  case dict:find(Name, Channels) of
     error -> {reply, {error, user_not_joined, "You must connect to the channel first."}, St} ;
-    {ok, Pid} ->
-      Data = {msg_from_client, Channel, Msg, self()},
-      Response = genserver:request(Pid, Data),
+    {ok, ChannelPid} ->
+      Data = {msg_from_client, Msg, self()},
+      Response = genserver:request(ChannelPid, Data),
       {reply, Response, St}
   end;
 
 %% Get current nick
-handle(St, whoami) ->
-  {reply, St#client_st.nick, St} ;
+handle(St = #client_st{nick = Nick}, whoami) ->
+  {reply, Nick, St} ;
 
 %% Set nick
-handle(St = #client_st{server = MaybeServer}, {nick, Nick}) ->
+handle(St = #client_st{maybe_server = MaybeServer, channels = Channels}, {nick, Nick}) ->
   case MaybeServer of
     none -> Response = ok;
     {is, Server} ->
-      Data = {nick, self(), Nick},
+      ChannelPids = [Pid || {_, Pid} <- dict:to_list(Channels)],
+      Data = {nick, self(), Nick, ChannelPids},
       Response = genserver:request(Server, Data)
   end,
   NewSt = St#client_st{nick = Nick},
